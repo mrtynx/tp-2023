@@ -1,24 +1,25 @@
-# Python program to open the
-# camera in Tkinter
-# Import the libraries,
-# tkinter, cv2, Image and ImageTk
-
-
 import cv2
+import socket
+import io
 import tkinter as tk
 from PIL import Image, ImageTk
 
 
 class WebcamApp:
-    def __init__(self, window_title="Webcam App"):
+    def __init__(self, window_title="Webcam to Docker IMG sender"):
         self.window = tk.Tk()
         self.window.title(window_title)
         self.window.protocol("WM_DELETE_WINDOW", self.close_app)
-        self.window.geometry("720x512")
+        self.window.geometry("690x512")
 
         # Attrs
+        self.buf_sz = 4096
         self.server_ip = None
         self.server_port = None
+        self.socket = None
+        self.sock_connected = False
+        self.cap = True
+        self.snapshot_img = None
 
         # Video
         self.label = tk.Label()
@@ -27,7 +28,7 @@ class WebcamApp:
         self.video_capture = cv2.VideoCapture(0)
 
         # Ip addr label
-        self.ip_label = tk.Label(text="Enter server address")
+        self.ip_label = tk.Label(text="Enter server IP")
         self.ip_label.pack()
         self.ip_label.place(x=540, y=0)
 
@@ -50,35 +51,83 @@ class WebcamApp:
         self.port_entry.insert(0, "6969")
         self.port_entry.bind("<Return>", self.get_port)
 
-        # Button
-        self.btn = tk.Button(text="Send to server", command=self.print_msg, width=13)
+        # Connect button
+        self.btn = tk.Button(text="Connect to server", command=self.connect_to_socket, width=13)
         self.btn.place(x=540, y=125)
+
+        # Snapshot button
+        self.snapshot_btn = tk.Button(text="Snapshot", width=13, command=self.snapshot)
+        self.snapshot_btn.place(x=540, y=400)
+
+        # Resume button
+        self.resume_btn = tk.Button(text="Resume vid", width=13, command=self.resume_video)
+        self.resume_btn.place(x=540, y=430)
+
+        # Send button
+        self.send_btn = tk.Button(text="Send", width=13, command=self.send_image)
+        self.send_btn.place(x=540, y=460)
 
         self.update_frame()
 
         self.window.mainloop()
 
+
     def update_frame(self):
         ret, frame = self.video_capture.read()
         if ret:
-            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGBA)
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             frame = cv2.resize(frame, (512, 512))
             photo = ImageTk.PhotoImage(image=Image.fromarray(frame))
-            self.label.photo_image = photo
-            self.label.configure(image=photo)
+            if self.cap:
+                self.snapshot_img = Image.fromarray(frame)
+                self.label.photo_image = photo
+                self.label.configure(image=photo)
 
         self.window.after(10, self.update_frame)
+
 
     def get_ip(self, event):
         self.server_ip = self.ip_entry.get()
 
-    def get_port(self, event):
-        self.server_port = self.port_entry.get()
 
-    def print_msg(self, *args):
-        print(f"ip = {self.server_ip}, port = {self.server_port}")
+    def get_port(self, event):
+        self.server_port = int(self.port_entry.get())
+
+
+    def connect_to_socket(self, *args):
+        if self.server_port is not None or self.server_ip is not None:
+            self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.socket.connect((self.server_ip, self.server_port))
+            self.sock_connected = True
+            print(f"[*] Connected to {self.server_ip}:{self.server_port}")
+        else:
+            print("Enter full server information")
+
+    def snapshot(self, *args):
+        self.cap = False
+
+
+    def resume_video(self, *args):
+        self.cap = True
+
+
+    def send_image(self, *args):
+        if self.sock_connected:
+            img = self.snapshot_img
+            img_bytes = io.BytesIO()
+            img.save(img_bytes, format='JPEG')
+            img_data = img_bytes.getvalue()
+            img_stream = io.BytesIO(img_data)
+            data = img_stream.read(buf_sz)
+            while data:
+                self.socket.send(data)
+                data = img_stream.read(buf_sz)
+        else:
+            print("Cannot send image because socket not connected")
 
     def close_app(self):
+        if self.socket is not None:
+            self.socket.close()
         self.video_capture.release()
         self.window.destroy()
 
