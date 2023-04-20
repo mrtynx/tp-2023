@@ -13,9 +13,9 @@ class WebcamApp:
         self.window.geometry("690x512")
 
         # Attrs
-        self.buf_sz = 4096
-        self.server_ip = None
-        self.server_port = None
+        self.buf_sz = 40960000
+        self.server_ip = "127.0.0.1"
+        self.server_port = 6666
         self.socket = None
         self.sock_connected = False
         self.cap = True
@@ -52,7 +52,9 @@ class WebcamApp:
         self.port_entry.bind("<Return>", self.get_port)
 
         # Connect button
-        self.btn = tk.Button(text="Connect to server", command=self.connect_to_socket, width=13)
+        self.btn = tk.Button(
+            text="Connect to server", command=self.connect_to_socket, width=13
+        )
         self.btn.place(x=540, y=125)
 
         # Snapshot button
@@ -60,7 +62,9 @@ class WebcamApp:
         self.snapshot_btn.place(x=540, y=400)
 
         # Resume button
-        self.resume_btn = tk.Button(text="Resume vid", width=13, command=self.resume_video)
+        self.resume_btn = tk.Button(
+            text="Resume vid", width=13, command=self.resume_video
+        )
         self.resume_btn.place(x=540, y=430)
 
         # Send button
@@ -71,28 +75,27 @@ class WebcamApp:
 
         self.window.mainloop()
 
-
     def update_frame(self):
         ret, frame = self.video_capture.read()
         if ret:
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             frame = cv2.resize(frame, (512, 512))
             photo = ImageTk.PhotoImage(image=Image.fromarray(frame))
-            if self.cap:
-                self.snapshot_img = Image.fromarray(frame)
-                self.label.photo_image = photo
-                self.label.configure(image=photo)
+            # if self.cap:
+            self.snapshot_img = frame
+            self.label.photo_image = photo
+            self.label.configure(image=photo)
 
         self.window.after(10, self.update_frame)
 
+        if self.sock_connected:
+            self.send_image()
 
     def get_ip(self, event):
         self.server_ip = self.ip_entry.get()
 
-
     def get_port(self, event):
         self.server_port = int(self.port_entry.get())
-
 
     def connect_to_socket(self, *args):
         if self.server_port is not None or self.server_ip is not None:
@@ -106,22 +109,20 @@ class WebcamApp:
     def snapshot(self, *args):
         self.cap = False
 
-
     def resume_video(self, *args):
         self.cap = True
 
-
     def send_image(self, *args):
         if self.sock_connected:
-            img = self.snapshot_img
+            img = Image.fromarray(self.snapshot_img)
             img_bytes = io.BytesIO()
-            img.save(img_bytes, format='JPEG')
+            img.save(img_bytes, format="JPEG")
             img_data = img_bytes.getvalue()
             img_stream = io.BytesIO(img_data)
-            data = img_stream.read(buf_sz)
+            data = img_stream.read(self.buf_sz)
             while data:
                 self.socket.send(data)
-                data = img_stream.read(buf_sz)
+                data = img_stream.read(self.buf_sz)
         else:
             print("Cannot send image because socket not connected")
 
