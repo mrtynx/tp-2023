@@ -1,7 +1,9 @@
-import cv2
+import pickle
 import socket
-import io
+import struct
 import tkinter as tk
+
+import cv2
 from PIL import Image, ImageTk
 
 
@@ -13,7 +15,6 @@ class WebcamApp:
         self.window.geometry("690x512")
 
         # Attrs
-        self.buf_sz = 40960000
         self.server_ip = "127.0.0.1"
         self.server_port = 6666
         self.socket = None
@@ -114,15 +115,12 @@ class WebcamApp:
 
     def send_image(self, *args):
         if self.sock_connected:
-            img = Image.fromarray(self.snapshot_img)
-            img_bytes = io.BytesIO()
-            img.save(img_bytes, format="JPEG")
-            img_data = img_bytes.getvalue()
-            img_stream = io.BytesIO(img_data)
-            data = img_stream.read(self.buf_sz)
-            while data:
-                self.socket.send(data)
-                data = img_stream.read(self.buf_sz)
+            img = cv2.cvtColor(self.snapshot_img, cv2.COLOR_BGR2GRAY)
+            data = pickle.dumps(img)
+            print(f"Sending {len(data)} bytes")
+            data_size_bytes = struct.pack("!I", len(data))
+            self.socket.sendall(data_size_bytes)
+            self.socket.sendall(data)
         else:
             print("Cannot send image because socket not connected")
 

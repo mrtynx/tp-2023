@@ -1,8 +1,9 @@
+import cv2
 import socket
-from PIL import Image
+import pickle
+import struct
 
-
-BUF_SIZE = 40960000
+BUF_SIZE = 4096
 
 
 def main():
@@ -16,18 +17,29 @@ def main():
     server_socket.listen()
     print(f"[*] Listening on {host}:{port}")
 
-    # Accept client connection
+    client_socket, client_address = server_socket.accept()
     while True:
-        client_socket, client_address = server_socket.accept()
-        while True:
-            data = client_socket.recv(BUF_SIZE)
-            if data:
-                print("Frame received")
-                img = open("img.jpg", "wb")
-                img.write(data)
-                img.close()
-                data = None
-                continue
+        data_size_bytes = client_socket.recv(4)
+        data_size = struct.unpack("!I", data_size_bytes)[0]
+
+        data = b""
+        while len(data) < data_size:
+            remaining_data = data_size - len(data)
+            chunk = client_socket.recv(min(remaining_data, BUF_SIZE))
+            if not chunk:
+                break
+            data += chunk
+
+        if len(data) != data_size:
+            print("Error: Incomplete data received")
+        else:
+            print("Frame received")
+            received = pickle.loads(data)
+            cv2.imshow("transfer", received)
+            if cv2.waitKey(1) & 0xFF == ord("q"):
+                cv2.destroyAllWindows()
+                server_socket.close()
+                break
 
 
 if __name__ == "__main__":
