@@ -4,3 +4,4 @@ pillow
 tk
 tensorflow
 numpy
+ultralytics

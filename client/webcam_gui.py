@@ -8,69 +8,109 @@ from PIL import Image, ImageTk
 
 
 class WebcamApp:
-    def __init__(self, window_title="Webcam to Docker IMG sender"):
+    def __init__(self, window_title="Object detection inference client"):
         self.window = tk.Tk()
         self.window.title(window_title)
         self.window.protocol("WM_DELETE_WINDOW", self.close_app)
-        self.window.geometry("690x512")
+        self.window.geometry("800x640")
+        self.framerate = 100
+        self.window.config(bg="#3B4252")
+        self.x = 655
+        self.y = 535
 
-        # Attrs
+        # Properties
         self.server_ip = "127.0.0.1"
         self.server_port = 6666
         self.socket = None
         self.sock_connected = False
-        self.cap = True
+        self.detect = False
         self.snapshot_img = None
 
         # Video
-        self.label = tk.Label()
-        self.label.pack()
-        self.label.place(x=0, y=0)
+        self.canvas = tk.Label(
+            width=640,
+            height=640,
+            bd=0,
+            highlightthickness=0,
+        )
+        self.canvas.pack()
+        self.canvas.place(x=0, y=0)
         self.video_capture = cv2.VideoCapture(0)
 
-        # Ip addr label
-        self.ip_label = tk.Label(text="Enter server IP")
-        self.ip_label.pack()
-        self.ip_label.place(x=540, y=0)
-
         # Ip addr entry
-        self.ip_entry = tk.Entry(width=16)
+        self.ip_entry = tk.Entry(
+            width=15,
+            bg="#4C566A",
+            bd=0,
+            highlightthickness=0,
+            relief="flat",
+            fg="white",
+        )
         self.ip_entry.pack()
-        self.ip_entry.place(x=540, y=30)
+        self.ip_entry.place(x=self.x, y=self.y)
         self.ip_entry.insert(0, "localhost")
-        self.ip_entry.bind("<Return>", self.get_ip)
-
-        # Port label
-        self.ip_label = tk.Label(text="Enter server port")
-        self.ip_label.pack()
-        self.ip_label.place(x=540, y=60)
+        self.ip_entry.bind("<FocusOut>", self.get_ip)
+        self.ip_entry.bind("<Button-1>", self.ip_onclick)
 
         # Port entry
-        self.port_entry = tk.Entry(width=16)
+        self.port_entry = tk.Entry(
+            width=15,
+            bg="#4C566A",
+            bd=0,
+            highlightthickness=0,
+            relief="flat",
+            fg="white",
+        )
         self.port_entry.pack()
-        self.port_entry.place(x=540, y=90)
+        self.port_entry.place(x=self.x, y=self.y + 30)
         self.port_entry.insert(0, "6969")
-        self.port_entry.bind("<Return>", self.get_port)
+        self.port_entry.bind("<FocusOut>", self.get_port)
+        self.port_entry.bind("<Button-1>", self.port_onclick)
 
         # Connect button
-        self.btn = tk.Button(
-            text="Connect to server", command=self.connect_to_socket, width=13
+        self.connect_btn = tk.Button(
+            text="Connect",
+            command=self.connect_to_socket,
+            width=12,
+            bd=0,
+            fg="white",
+            highlightthickness=0,
+            relief="flat",
+            anchor="center",
+            justify="center",
         )
-        self.btn.place(x=540, y=125)
+        self.connect_btn.place(x=self.x, y=self.y + 60)
+        self.connect_btn.config(bg="#5E81AC")
 
-        # Snapshot button
-        self.snapshot_btn = tk.Button(text="Snapshot", width=13, command=self.snapshot)
-        self.snapshot_btn.place(x=540, y=400)
-
-        # Resume button
-        self.resume_btn = tk.Button(
-            text="Resume vid", width=13, command=self.resume_video
+        # Detect button
+        self.detect_btn = tk.Button(
+            text="Detect",
+            command=self.start_detection,
+            width=12,
+            bd=0,
+            fg="white",
+            highlightthickness=0,
+            relief="flat",
+            anchor="center",
+            justify="center",
         )
-        self.resume_btn.place(x=540, y=430)
+        self.detect_btn.place(x=self.x, y=250)
+        self.detect_btn.config(bg="#A3BE8C")
 
-        # Send button
-        self.send_btn = tk.Button(text="Send", width=13, command=self.send_image)
-        self.send_btn.place(x=540, y=460)
+        # Stop button
+        self.stop_btn = tk.Button(
+            text="Stop",
+            command=self.stop_detection,
+            width=12,
+            bd=0,
+            fg="white",
+            highlightthickness=0,
+            relief="flat",
+            anchor="center",
+            justify="center",
+        )
+        self.stop_btn.place(x=self.x, y=285)
+        self.stop_btn.config(bg="#BF616A")
 
         self.update_frame()
 
@@ -80,23 +120,40 @@ class WebcamApp:
         ret, frame = self.video_capture.read()
         if ret:
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            frame = cv2.resize(frame, (512, 512))
+            frame = cv2.resize(frame, (640, 640))
             photo = ImageTk.PhotoImage(image=Image.fromarray(frame))
             # if self.cap:
             self.snapshot_img = frame
-            self.label.photo_image = photo
-            self.label.configure(image=photo)
+            self.canvas.photo_image = photo
+            self.canvas.configure(image=photo)
 
-        self.window.after(10, self.update_frame)
+        self.window.after(self.framerate, self.update_frame)
 
-        if self.sock_connected:
-            self.send_image()
+        if self.sock_connected and self.detect:
+            self.send_frame()
+            msg = self.socket.recvmsg(1024)
+            print(msg)
+
+    def ip_onclick(self, event):
+        self.ip_entry.delete(0, tk.END)
+
+    def port_onclick(self, event):
+        self.port_entry.delete(0, tk.END)
 
     def get_ip(self, event):
         self.server_ip = self.ip_entry.get()
 
     def get_port(self, event):
-        self.server_port = int(self.port_entry.get())
+        try:
+            self.server_port = int(self.port_entry.get())
+        except:
+            print("Invalid port entry")
+
+    def start_detection(self, *args):
+        self.detect = True
+
+    def stop_detection(self, *args):
+        self.detect = False
 
     def connect_to_socket(self, *args):
         if self.server_port is not None or self.server_ip is not None:
@@ -107,17 +164,11 @@ class WebcamApp:
         else:
             print("Enter full server information")
 
-    def snapshot(self, *args):
-        self.cap = False
-
-    def resume_video(self, *args):
-        self.cap = True
-
-    def send_image(self, *args):
+    def send_frame(self, *args):
         if self.sock_connected:
-            img = cv2.cvtColor(self.snapshot_img, cv2.COLOR_BGR2GRAY)
-            data = pickle.dumps(img)
-            print(f"Sending {len(data)} bytes")
+            # img = cv2.cvtColor(self.snapshot_img, cv2.COLOR_BGR2GRAY)
+            data = pickle.dumps(self.snapshot_img)
+            # print(f"Sending {len(data)} bytes")
             data_size_bytes = struct.pack("!I", len(data))
             self.socket.sendall(data_size_bytes)
             self.socket.sendall(data)
