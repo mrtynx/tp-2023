@@ -1,5 +1,4 @@
 opencv-python
-opencv-python-headless
 pillow
 tk
 tensorflow

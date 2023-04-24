@@ -1,7 +1,10 @@
 import pickle
 import socket
 import struct
+
+import numpy as np
 import tkinter as tk
+import pyrealsense2 as rs
 
 import cv2
 from PIL import Image, ImageTk
@@ -26,6 +29,15 @@ class WebcamApp:
         self.detect = False
         self.snapshot_img = None
 
+        # Realsense
+        self.realsense = False
+        self.pipeline = None
+        self.config = None
+        self.pipeline_wrapper = None
+        self.pipeline_profile = None
+        self.device = None
+        self.device_product_line = None
+
         # Video
         self.canvas = tk.Label(
             width=640,
@@ -35,7 +47,7 @@ class WebcamApp:
         )
         self.canvas.pack()
         self.canvas.place(x=0, y=0)
-        self.video_capture = cv2.VideoCapture(0)
+        self.video_capture = cv2.VideoCapture(1)
 
         # Ip addr entry
         self.ip_entry = tk.Entry(
@@ -112,17 +124,48 @@ class WebcamApp:
         self.stop_btn.place(x=self.x, y=285)
         self.stop_btn.config(bg="#BF616A")
 
+        # Realsense Buttnon
+        self.realsense_btn = tk.Button(
+            text="Use RealSense",
+            command=self.use_realsense,
+            width=12,
+            bd=0,
+            fg="white",
+            highlightthickness=0,
+            relief="flat",
+            anchor="center",
+            justify="center",
+        )
+        self.realsense_btn.place(x=self.x, y=320)
+        self.realsense_btn.config(bg="#88c0d0")
+
+        # Realsense Buttnon
+        self.realsense_btn = tk.Button(
+            text="Snapshot",
+            command=self.use_realsense,
+            width=12,
+            bd=0,
+            fg="white",
+            highlightthickness=0,
+            relief="flat",
+            anchor="center",
+            justify="center",
+        )
+        self.realsense_btn.place(x=self.x, y=355)
+        self.realsense_btn.config(bg="#d08770")
+
         self.update_frame()
 
         self.window.mainloop()
 
     def update_frame(self):
-        ret, frame = self.video_capture.read()
-        if ret:
-            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            frame = cv2.resize(frame, (640, 640))
+        if self.realsense:
+            frame = self.realsense_capture()
+        else:
+            frame = self.generic_capture()
+
+        if frame is not None:
             photo = ImageTk.PhotoImage(image=Image.fromarray(frame))
-            # if self.cap:
             self.snapshot_img = frame
             self.canvas.photo_image = photo
             self.canvas.configure(image=photo)
@@ -131,8 +174,8 @@ class WebcamApp:
 
         if self.sock_connected and self.detect:
             self.send_frame()
-            msg = self.socket.recvmsg(1024)
-            print(msg)
+            # msg = self.socket.recvmsg(1024)
+            # print(msg)
 
     def ip_onclick(self, event):
         self.ip_entry.delete(0, tk.END)
@@ -155,6 +198,51 @@ class WebcamApp:
     def stop_detection(self, *args):
         self.detect = False
 
+    def use_realsense(self, *args):
+        self.video_capture.release()
+
+        self.pipeline = rs.pipeline()
+        self.config = rs.config()
+        self.pipeline_wrapper = rs.pipeline_wrapper(self.pipeline)
+        self.pipeline_profile = self.config.resolve(self.pipeline_wrapper)
+        self.device = self.pipeline_profile.get_device()
+        self.device_product_line = str(
+            self.device.get_info(rs.camera_info.product_line)
+        )
+
+        found_rgb = False
+        for s in self.device.sensors:
+            if s.get_info(rs.camera_info.name) == "RGB Camera":
+                print("Found RealSense")
+                found_rgb = True
+        if not found_rgb:
+            print("RGB Camera required")
+            exit(0)
+
+        self.config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
+        self.pipeline.start(self.config)
+        self.realsense = True
+
+    def realsense_capture(self):
+        frames = self.pipeline.wait_for_frames()
+        color_frame = frames.get_color_frame()
+        if not color_frame:
+            return None
+
+        color_image = np.asanyarray(color_frame.get_data())
+        color_image = cv2.resize(color_image, (640, 640))
+
+        return color_image
+
+    def generic_capture(self):
+        ret, frame = self.video_capture.read()
+        if ret:
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            frame = cv2.resize(frame, (640, 640))
+            return frame
+        else:
+            return None
+
     def connect_to_socket(self, *args):
         if self.server_port is not None or self.server_ip is not None:
             self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -175,9 +263,14 @@ class WebcamApp:
         else:
             print("Cannot send image because socket not connected")
 
+    def snapshot(self, *args):
+        pass
+
     def close_app(self):
         if self.socket is not None:
             self.socket.close()
+        if self.realsense:
+            self.pipeline.stop()
         self.video_capture.release()
         self.window.destroy()
 

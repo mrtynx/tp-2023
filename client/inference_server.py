@@ -42,7 +42,7 @@ def main():
             results = model.predict(received, imgsz=640, conf=0.5)
             res_plotted = results[0].plot()
             cv2.imshow("result", res_plotted)
-            client_socket.sendall(b"niceru\n")
+            # client_socket.sendall(b"niceru\n")
 
             if cv2.waitKey(1) & 0xFF == ord("q"):
                 cv2.destroyAllWindows()
