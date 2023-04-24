@@ -47,7 +47,7 @@ class WebcamApp:
         )
         self.canvas.pack()
         self.canvas.place(x=0, y=0)
-        self.video_capture = cv2.VideoCapture(1)
+        self.video_capture = cv2.VideoCapture(0)
 
         # Ip addr entry
         self.ip_entry = tk.Entry(
