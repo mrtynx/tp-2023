@@ -5,8 +5,9 @@ import struct
 import numpy as np
 import tkinter as tk
 import pyrealsense2 as rs
-
+import os
 import cv2
+
 from PIL import Image, ImageTk
 
 
@@ -142,7 +143,7 @@ class WebcamApp:
         # Realsense Buttnon
         self.realsense_btn = tk.Button(
             text="Snapshot",
-            command=self.use_realsense,
+            command=self.snapshot,
             width=12,
             bd=0,
             fg="white",
@@ -230,6 +231,7 @@ class WebcamApp:
             return None
 
         color_image = np.asanyarray(color_frame.get_data())
+        color_image = cv2.cvtColor(color_image, cv2.COLOR_BGR2RGB)  # convert BGR to RGB
         color_image = cv2.resize(color_image, (640, 640))
 
         return color_image
@@ -264,7 +266,20 @@ class WebcamApp:
             print("Cannot send image because socket not connected")
 
     def snapshot(self, *args):
-        pass
+        image_dir = "D:\\FEI-STU\\TP\\network\\client\\dataset"
+        image_files = [f for f in os.listdir(image_dir) if f.endswith('.png')]
+
+        highest_num = 0
+        for image_file in image_files:
+            num=int(image_file[7:-4])
+            if num > highest_num:
+                highest_num = num
+        next_num = highest_num + 1
+        next_filename = f"screws_{next_num:03}.png"
+        next_filepath = os.path.join(image_dir, next_filename)
+        frame = cv2.cvtColor(self.snapshot_img, cv2.COLOR_BGR2RGB)
+
+        cv2.imwrite(next_filepath, frame)     
 
     def close_app(self):
         if self.socket is not None:

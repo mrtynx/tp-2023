@@ -6,17 +6,16 @@ import pathlib
 from tensorflow.keras.preprocessing import image as image_utils
 
 path = pathlib.Path("sample_img/")
-num_classes = 2
-img_width = 256
-img_height = 256
+num_classes = 9
+img_width = 640
+img_height = 640
 batch_size = 32
 
 dataset = tf.keras.preprocessing.image_dataset_from_directory(
-    directory=path,
-    image_size=(img_height, img_width),
+    directory=path, image_size=(img_height, img_width), batch_size=batch_size
 ).map(preprocess_images)
 
-val_split = 0.2
+val_split = 0.1
 num_samples = dataset.cardinality().numpy()
 num_val_samples = int(num_samples * val_split)
 num_train_samples = num_samples - num_val_samples
@@ -42,4 +41,6 @@ model.compile(
     optimizer="adam", loss="sparse_categorical_crossentropy", metrics=["accuracy"]
 )
 
-history = model.fit(train_dataset, epochs=20, validation_data=val_dataset)
+history = model.fit(
+    train_dataset, epochs=20, validation_data=val_dataset, batch_size=batch_size
+)
